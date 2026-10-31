@@ -196,8 +196,17 @@ def main():
         default="",
         help="Custom base branch to diff against (e.g. develop, main, staging)."
     )
+    parser.add_argument(
+        "extra_args",
+        nargs="*",
+        help="Optional positional base branch or extra arguments."
+    )
 
     parsed_args = parser.parse_args()
+
+    # Allow passing base branch positionally as 2nd argument (e.g. bundle-local v1.0.0 develop)
+    if not parsed_args.base and parsed_args.extra_args:
+        parsed_args.base = parsed_args.extra_args[0]
 
     # 1. Verify Git repository (Item 8)
     code, git_root_str = run_git(["rev-parse", "--show-toplevel"])

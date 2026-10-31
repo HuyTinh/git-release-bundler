@@ -16,8 +16,9 @@ Mark Git branches for local release preparation and consolidation into a release
 
 ## Execution Directives
 When invoked:
-1. Run the Python script:
+1. Run using the global Git alias:
    ```bash
-   python "$HOME/.gemini/config/skills/git-mark/scripts/mark.py" "<action_or_branch_name>" "<target_branch_if_any>"
+   git mark [action_or_branch_name] [target_branch_if_any]
    ```
+   *(Or direct script execution: `python "<path>/mark.py" [args]`)*
 2. Respond with a concise, formatted summary in the user's conversational language.
