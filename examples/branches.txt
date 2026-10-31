@@ -1,0 +1,5 @@
+# Release: uat-1.2.0
+# Generated at: 2026-10-31 17:50:00
+# Base branch: develop
+feat/orders-export 3f1a2b4
+fix/auth-deadlock 8d7c6e5

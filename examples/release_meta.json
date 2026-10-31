@@ -1,0 +1,39 @@
+{
+  "version": "uat-1.2.0",
+  "created_at": "2026-10-31 17:50:00",
+  "base_branch": "develop",
+  "branches": [
+    {
+      "name": "feat/orders-export",
+      "commit_sha": "3f1a2b4"
+    },
+    {
+      "name": "fix/auth-deadlock",
+      "commit_sha": "8d7c6e5"
+    }
+  ],
+  "highlights_count": {
+    "features": 2,
+    "fixes": 1,
+    "others": 1
+  },
+  "api_endpoints": {
+    "web": [
+      "`POST /api/v1/orders/export-excel` - Xuất báo cáo đơn hàng ra Excel"
+    ],
+    "mobile": [
+      "`POST /api/v1/mobile/payments/vnpay/retry` - Thử lại thanh toán VNPay"
+    ]
+  },
+  "sql_files": [
+    {
+      "file": "migrations/01_export_jobs.sql",
+      "sha256": "4b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c"
+    },
+    {
+      "file": "migrations/02_payment_retry.sql",
+      "sha256": "e5f4d3c2b1a09f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e"
+    }
+  ],
+  "warnings": []
+}

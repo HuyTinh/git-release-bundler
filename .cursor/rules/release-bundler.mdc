@@ -1,0 +1,28 @@
+---
+description: Local Git release compilation, branch marking, and DB script consolidation guidelines
+globs: *
+---
+
+# Git Release Bundler Guidelines for Cursor
+
+When the user asks to prepare a local release, mark branches, or compiles release changelogs:
+
+## 1. Available Commands
+- To mark the current branch:
+  `git mark`
+- To mark an explicit branch:
+  `git mark <branch_name>`
+- To list all marked branches:
+  `git mark list`
+- To unmark a branch:
+  `git mark unmark <branch_name>`
+- To clear marked branches:
+  `git mark clear`
+- To compile the local release bundle:
+  `git bundle-local <version> [options]`
+  - Options: `--fresh` (overwrite from scratch), `--dry-run` (simulate without writing), `--base <branch>` (override base)
+
+## 2. Release Directives
+- **Zero Remote Footprint**: Never create remote tags, merge branches, or push during local bundling.
+- **Ready-to-copy Highlights**: Extract Section 1 (Features & Highlights) and Section 2 (New APIs) and present them directly in chat for 1-click sharing.
+- **SQL Safety**: Always inspect `combined_db_scripts.sql` for any `[CRITICAL SECURITY WARNING]` flags before running database migrations.

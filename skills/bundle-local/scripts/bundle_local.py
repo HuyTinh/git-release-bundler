@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 import os
 import re
+import json
 import datetime
 import hashlib
 import argparse
@@ -60,6 +61,9 @@ def clean_commit_message(msg: str) -> str:
     if not text:
         return ""
 
+    # Strip Git trailers (Co-authored-by, Signed-off-by, Reviewed-by)
+    text = re.sub(r'^(?:co-authored-by|signed-off-by|reviewed-by):.*$', '', text, flags=re.IGNORECASE | re.MULTILINE).strip()
+
     # Strip revert prefix: revert: "..." or Revert "..."
     text = re.sub(r'^(?:revert:\s*"?|Revert\s+"?)(.*?)"?$', r'\1', text, flags=re.IGNORECASE).strip()
 
@@ -72,7 +76,7 @@ def clean_commit_message(msg: str) -> str:
     pattern = (
         r'^(?:\[[A-Za-z0-9_\-]+\]|\b[A-Za-z0-9_\-]+-\d+:|\(#[0-9]+\))\s*'
         r'|(?:\[[A-Za-z0-9_\-]+\]\s*)?'
-        r'(?:feat|fix|chore|docs|refactor|update|style|perf|test|build|ci|revert)'
+        r'(?:feat|fix|hotfix|add|chore|docs|refactor|update|style|perf|test|build|ci|revert)'
         r'(?:\([^\)]+\))?!?:'
         r'\s*'
     )
@@ -81,6 +85,68 @@ def clean_commit_message(msg: str) -> str:
     if clean:
         clean = clean[0].upper() + clean[1:]
     return clean if clean else text
+
+
+def categorize_commit(msg: str) -> tuple[str, str]:
+    """
+    Categorizes commit into 'features', 'fixes', or 'others',
+    and returns (category, cleaned_message).
+    Filters git trailers like Co-authored-by.
+    """
+    text = msg.strip()
+    text = re.sub(r'^(?:co-authored-by|signed-off-by|reviewed-by):.*$', '', text, flags=re.IGNORECASE | re.MULTILINE).strip()
+    if not text:
+        return "others", ""
+
+    lower = text.lower()
+    # Check if commit message indicates a feature
+    if re.search(r'^(?:\[[A-Za-z0-9_\-]+\]\s*)?(?:[A-Za-z0-9_\-]+-\d+:\s*)?(?:feat|add)\b', lower):
+        category = "features"
+    # Check if commit message indicates a bugfix
+    elif re.search(r'^(?:\[[A-Za-z0-9_\-]+\]\s*)?(?:[A-Za-z0-9_\-]+-\d+:\s*)?(?:fix|hotfix|bugfix|patch)\b', lower):
+        category = "fixes"
+    else:
+        category = "others"
+
+    clean = clean_commit_message(text)
+    return category, clean
+
+
+def scan_sql_safety(sql_text: str) -> list[str]:
+    """
+    Item (3): Scans SQL script for potentially destructive operations:
+    - DROP TABLE / DATABASE / SCHEMA / VIEW
+    - TRUNCATE TABLE
+    - DELETE FROM without a WHERE clause
+    Ignores SQL comments (-- and /* */).
+    """
+    warnings = []
+    # Strip block comments /* ... */
+    no_comments = re.sub(r'/\*.*?\*/', ' ', sql_text, flags=re.DOTALL)
+    # Strip line comments -- ...
+    no_comments = re.sub(r'--.*$', ' ', no_comments, flags=re.MULTILINE)
+
+    # Split statements by semicolon
+    statements = [s.strip() for s in no_comments.split(';') if s.strip()]
+
+    for stmt in statements:
+        # Check for DROP
+        drop_match = re.search(r'\bDROP\s+(TABLE|DATABASE|SCHEMA|VIEW)\s+(?:IF\s+EXISTS\s+)?([`"\'\w\.]+)', stmt, re.IGNORECASE)
+        if drop_match:
+            warnings.append(f"Dangerous operation: DROP {drop_match.group(1).upper()} `{drop_match.group(2)}`")
+
+        # Check for TRUNCATE
+        trunc_match = re.search(r'\bTRUNCATE\s+(?:TABLE\s+)?([`"\'\w\.]+)', stmt, re.IGNORECASE)
+        if trunc_match:
+            warnings.append(f"Dangerous operation: TRUNCATE TABLE `{trunc_match.group(1)}`")
+
+        # Check for DELETE without WHERE
+        delete_match = re.search(r'\bDELETE\s+FROM\s+([`"\'\w\.]+)', stmt, re.IGNORECASE)
+        if delete_match:
+            if not re.search(r'\bWHERE\b', stmt, re.IGNORECASE):
+                warnings.append(f"HIGH SEVERITY DANGER: DELETE FROM `{delete_match.group(1)}` without WHERE clause")
+
+    return list(dict.fromkeys(warnings))
 
 
 def validate_version_name(version: str) -> bool:
@@ -138,15 +204,18 @@ def format_changelog(
     base_branch: str,
     branches: list[str],
     now_str: str,
-    business_lines: list[str],
-    api_web_lines: list[str],
-    api_mob_lines: list[str],
-    sql_files: list[str],
-    branch_commit_blocks: list[str]
+    features: list[str] = None,
+    fixes: list[str] = None,
+    others: list[str] = None,
+    api_web_lines: list[str] = None,
+    api_mob_lines: list[str] = None,
+    sql_files: list[str] = None,
+    branch_commit_blocks: list[str] = None,
+    business_lines: list[str] = None,
 ) -> str:
     """
     Builds the standardized 4-section CHANGELOG_LOCAL.md:
-      1. Features & Business Highlights (Ready-to-copy)
+      1. Features & Business Highlights (Ready-to-copy): Grouped into Features, Fixes, Others
       2. New API Endpoints (Web & Mobile)
       3. Database Migrations
       4. Technical Audit (Commits by branch)
@@ -162,10 +231,48 @@ def format_changelog(
         "### 1. Features & Business Highlights (Ready-to-copy):"
     ]
 
-    unique_business = list(dict.fromkeys(business_lines))
-    if unique_business:
-        lines.extend(unique_business)
-    else:
+    # Backward compatibility if business_lines was provided
+    if features is None and business_lines is not None:
+        features = []
+        fixes = []
+        others = []
+        for line in business_lines:
+            raw_content = line.lstrip("- ").strip()
+            cat, clean = categorize_commit(raw_content)
+            if cat == "features":
+                features.append(clean)
+            elif cat == "fixes":
+                fixes.append(clean)
+            else:
+                others.append(clean)
+
+    unique_features = list(dict.fromkeys(features or []))
+    unique_fixes = list(dict.fromkeys(fixes or []))
+    unique_others = list(dict.fromkeys(others or []))
+
+    has_entries = False
+    if unique_features:
+        lines.append("")
+        lines.append("#### 🚀 Features:")
+        for item in unique_features:
+            lines.append(f"- {item}")
+        has_entries = True
+
+    if unique_fixes:
+        lines.append("")
+        lines.append("#### 🐛 Bug Fixes:")
+        for item in unique_fixes:
+            lines.append(f"- {item}")
+        has_entries = True
+
+    if unique_others:
+        lines.append("")
+        lines.append("#### 🔧 Other Improvements:")
+        for item in unique_others:
+            lines.append(f"- {item}")
+        has_entries = True
+
+    if not has_entries:
         lines.append("- *(No feature commit messages detected)*")
 
     lines.append("")
@@ -173,8 +280,8 @@ def format_changelog(
     lines.append("")
     lines.append("### 2. New API Endpoints:")
 
-    unique_web = list(dict.fromkeys(api_web_lines))
-    unique_mob = list(dict.fromkeys(api_mob_lines))
+    unique_web = list(dict.fromkeys(api_web_lines or []))
+    unique_mob = list(dict.fromkeys(api_mob_lines or []))
 
     if not unique_web and not unique_mob:
         lines.append("- *(No new API endpoints detected in commit messages)*")
@@ -210,7 +317,8 @@ def format_changelog(
     lines.append("")
     lines.append("### 4. Technical Audit (Commits by branch):")
     lines.append("")
-    lines.append("\n".join(branch_commit_blocks))
+    if branch_commit_blocks:
+        lines.append("\n".join(branch_commit_blocks))
 
     return "\n".join(lines) + "\n"
 
@@ -233,28 +341,23 @@ def ensure_git_exclude(git_dir: Path, ignore_entry: str):
 
 def format_combined_sql(sql_files_data: dict[str, dict], version: str, branches: list[str], now_str: str) -> tuple[str, list[str]]:
     """
-    Item (6): Formats combined SQL script with deterministic sorting and collision detection.
-    Returns (sql_content, list_of_collision_warnings).
+    Item (6) & (3): Formats combined SQL script with deterministic sorting,
+    source checksums, and SQL safety scanning (DROP, TRUNCATE, DELETE without WHERE).
+    Returns (sql_content, list_of_all_warnings).
     """
-    combined_sql_lines = [
-        "-- ======================================================================",
-        f"-- COMBINED DATABASE RELEASE SCRIPT: {version}",
-        f"-- Generated at: {now_str}",
-        f"-- Source branches: {', '.join(branches)}",
-        "-- ======================================================================",
-        ""
-    ]
     warnings = []
+    combined_body = []
+    checksum_lines = []
 
-    if not sql_files_data:
-        combined_sql_lines.append("-- [INFO] No SQL migration scripts detected across these branches.\n")
-    else:
-        # Deterministic sorting by path name
+    if sql_files_data:
         for sql_file in sorted(sql_files_data.keys()):
             data = sql_files_data[sql_file]
             file_branches = data["branches"]
-            hashes = list(set(data["hashes"].values()))
+            chosen_branch = file_branches[-1]
+            chosen_hash = data["hashes"][chosen_branch]
+            checksum_lines.append(f"--   * {sql_file} [sha256: {chosen_hash[:16]}...]")
 
+            hashes = list(set(data["hashes"].values()))
             collision_warning = ""
             if len(hashes) > 1:
                 collision_warning = (
@@ -263,23 +366,60 @@ def format_combined_sql(sql_files_data: dict[str, dict], version: str, branches:
                 )
                 warnings.append(f"SQL file '{sql_file}' has differing contents across branches: {', '.join(file_branches)}")
 
-            chosen_branch = file_branches[-1]
             content = data["contents"][chosen_branch]
-
             other_branches = ""
             if len(file_branches) > 1:
                 other_branches = f" (Also present in: {', '.join(file_branches)})"
 
-            combined_sql_lines.append("-- ----------------------------------------------------------------------")
-            combined_sql_lines.append(f"-- FILE: {sql_file}")
-            combined_sql_lines.append(f"-- SOURCE BRANCH: {chosen_branch}{other_branches}")
+            combined_body.append("-- ----------------------------------------------------------------------")
+            combined_body.append(f"-- FILE: {sql_file}")
+            combined_body.append(f"-- SOURCE BRANCH: {chosen_branch}{other_branches}")
             if collision_warning:
-                combined_sql_lines.append(collision_warning)
-            combined_sql_lines.append("-- ----------------------------------------------------------------------")
+                combined_body.append(collision_warning)
+            combined_body.append("-- ----------------------------------------------------------------------")
 
             if content:
-                combined_sql_lines.append(content.strip())
-                combined_sql_lines.append("")
+                combined_body.append(content.strip())
+                combined_body.append("")
+
+    full_body_str = "\n".join(combined_body)
+    safety_warnings = scan_sql_safety(full_body_str)
+    for sw in safety_warnings:
+        warnings.append(sw)
+
+    combined_sql_lines = []
+    if safety_warnings:
+        combined_sql_lines.extend([
+            "-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+            "-- [CRITICAL SECURITY WARNING / CẢNH BÁO AN TOÀN DỮ LIỆU]",
+            "-- Potentially destructive SQL statements detected:"
+        ])
+        for sw in safety_warnings:
+            combined_sql_lines.append(f"--   ! {sw}")
+        combined_sql_lines.extend([
+            "-- Review thoroughly before executing against staging or production DB!",
+            "-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+            ""
+        ])
+
+    combined_sql_lines.extend([
+        "-- ======================================================================",
+        f"-- COMBINED DATABASE RELEASE SCRIPT: {version}",
+        f"-- Generated at: {now_str}",
+        f"-- Source branches: {', '.join(branches)}"
+    ])
+    if checksum_lines:
+        combined_sql_lines.append("-- Source files & SHA-256 Checksums:")
+        combined_sql_lines.extend(checksum_lines)
+    combined_sql_lines.extend([
+        "-- ======================================================================",
+        ""
+    ])
+
+    if not sql_files_data:
+        combined_sql_lines.append("-- [INFO] No SQL migration scripts detected across these branches.\n")
+    else:
+        combined_sql_lines.append(full_body_str)
 
     return "\n".join(combined_sql_lines) + "\n", warnings
 
@@ -303,6 +443,12 @@ def main():
         dest="fresh",
         action="store_true",
         help="Overwrite target version bundle from scratch without merging previous branches."
+    )
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="Simulate release bundle compilation without writing files or clearing marked branches."
     )
     parser.add_argument(
         "--base",
@@ -407,6 +553,8 @@ def main():
             _, cur = run_git(["branch", "--show-current"])
             base_branch = cur if cur else "main"
 
+    is_dry_run = parsed_args.dry_run
+
     # 5. Determine Output Directory (.antigravity precedence) and Defense-in-depth resolve check
     antigravity_dir = git_root / ".antigravity"
     if antigravity_dir.exists() and antigravity_dir.is_dir():
@@ -423,35 +571,78 @@ def main():
         print(f"[SECURITY ERROR] Path traversal detected for version: '{version}'", file=sys.stderr)
         sys.exit(1)
 
-    target_dir.mkdir(parents=True, exist_ok=True)
+    if not is_dry_run:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        # Item (7): Automatically add to .git/info/exclude without dirtying .gitignore
+        ensure_git_exclude(git_dir, ignore_entry)
 
-    # Item (7): Automatically add to .git/info/exclude without dirtying .gitignore
-    ensure_git_exclude(git_dir, ignore_entry)
-
-    # 6. Save branches.txt (Smart Accumulate unless --fresh)
+    # 6. Branch validation, SHAs, and Smart Accumulate (unless --fresh)
     is_fresh_mode = parsed_args.fresh
     branches_file = target_dir / "branches.txt"
-    if branches_file.exists() and not is_fresh_mode:
-        old_branches = [
-            line.strip()
-            for line in branches_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
-        merged = list(dict.fromkeys(old_branches + branches))
+    branch_shas: dict[str, str] = {}
+    valid_branches: list[str] = []
+
+    # Check for deleted or already merged branches
+    for b in branches:
+        code, _ = run_git(["rev-parse", "--verify", "--quiet", b])
+        if code != 0:
+            print(f"[WARN] Branch '{b}' no longer exists locally. Skipping.")
+            continue
+
+        # Check if already merged into base
+        code, _ = run_git(["merge-base", "--is-ancestor", b, base_branch])
+        if code == 0:
+            print(f"[NOTICE] Branch '{b}' is already fully merged into '{base_branch}'.")
+
+        _, sha = run_git(["rev-parse", "--short", b])
+        branch_shas[b] = sha if sha else "unknown"
+        valid_branches.append(b)
+
+    if not valid_branches:
+        print("[ERROR] None of the marked branches could be resolved locally.", file=sys.stderr)
+        sys.exit(2)
+
+    active_branches = valid_branches
+    if branches_file.exists() and not is_fresh_mode and not is_dry_run:
+        old_branches = []
+        for line in branches_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                parts = line.split()
+                if parts:
+                    old_branches.append(parts[0])
+        merged = list(dict.fromkeys(old_branches + active_branches))
         new_count = len(merged) - len(old_branches)
         print(f"\n[UPDATE] Release version '{version}' already exists!")
         print(f"-> Merged {len(old_branches)} existing branches + {new_count} newly marked branches.")
         print(f"-> Total branches in release: {len(merged)}.\n")
-        branches = merged
-    elif is_fresh_mode and target_dir.exists():
-        print(f"\n[FRESH] Fresh mode enabled: Overwriting '{version}' with {len(branches)} new branches.\n")
+        active_branches = merged
+    elif is_fresh_mode and target_dir.exists() and not is_dry_run:
+        print(f"\n[FRESH] Fresh mode enabled: Overwriting '{version}' with {len(active_branches)} new branches.\n")
 
-    branches_file.write_text("\n".join(branches) + "\n", encoding="utf-8")
+    # Item (1): Format branches.txt with commit SHA and timestamp
+    branches_file_lines = [
+        f"# Release: {version}",
+        f"# Generated at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"# Base branch: {base_branch}",
+    ]
+    for b in active_branches:
+        sha = branch_shas.get(b, "")
+        if not sha:
+            _, sha = run_git(["rev-parse", "--short", b])
+            sha = sha if sha else "unknown"
+            branch_shas[b] = sha
+        branches_file_lines.append(f"{b} {sha}")
+
+    if not is_dry_run:
+        branches_file.write_text("\n".join(branches_file_lines) + "\n", encoding="utf-8")
 
     # 7. Collect Commits (Changelog) & SQL files
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    business_lines = []
+    features = []
+    fixes = []
+    others = []
     api_web_lines = []
     api_mob_lines = []
     branch_commit_blocks = []
@@ -459,10 +650,9 @@ def main():
     # Map: sql_file_path -> dict(hashes={branch: sha256}, contents={branch: str}, branches=[])
     sql_files_data: dict[str, dict] = {}
 
-    for b in branches:
+    for b in active_branches:
         code, _ = run_git(["rev-parse", "--verify", "--quiet", b])
         if code != 0:
-            print(f"[WARN] Branch '{b}' could not be resolved locally. Skipping.")
             continue
 
         _, merge_base = run_git(["merge-base", base_branch, b])
@@ -482,9 +672,14 @@ def main():
                     else:
                         api_mob_lines.append(api_entry)
 
-                clean_msg = clean_commit_message(cmsg)
+                cat, clean_msg = categorize_commit(cmsg)
                 if clean_msg:
-                    business_lines.append(f"- {clean_msg}")
+                    if cat == "features":
+                        features.append(clean_msg)
+                    elif cat == "fixes":
+                        fixes.append(clean_msg)
+                    else:
+                        others.append(clean_msg)
 
         # Technical audit entries
         branch_block = [f"#### Branch: `{b}`"]
@@ -512,30 +707,75 @@ def main():
                 sql_files_data[sql_f]["hashes"][b] = content_hash
                 sql_files_data[sql_f]["contents"][b] = content
 
-    # Write Changelog (Item 2: Explicit UTF-8)
+    # Build Changelog
     changelog_path = target_dir / "CHANGELOG_LOCAL.md"
     changelog_content = format_changelog(
         version=version,
         base_branch=base_branch,
-        branches=branches,
+        branches=active_branches,
         now_str=now_str,
-        business_lines=business_lines,
+        features=features,
+        fixes=fixes,
+        others=others,
         api_web_lines=api_web_lines,
         api_mob_lines=api_mob_lines,
         sql_files=list(sql_files_data.keys()),
         branch_commit_blocks=branch_commit_blocks
     )
+
+    # 8. Combine SQL files with deterministic sorting & safety check
+    combined_sql_path = target_dir / "combined_db_scripts.sql"
+    combined_sql_text, warnings = format_combined_sql(sql_files_data, version, active_branches, now_str)
+    for w in warnings:
+        print(f"[SECURITY/WARNING] {w}")
+
+    # Build release_meta.json
+    meta_path = target_dir / "release_meta.json"
+    meta_data = {
+        "version": version,
+        "created_at": now_str,
+        "base_branch": base_branch,
+        "branches": [{"name": b, "commit_sha": branch_shas.get(b, "")} for b in active_branches],
+        "highlights_count": {
+            "features": len(list(dict.fromkeys(features))),
+            "fixes": len(list(dict.fromkeys(fixes))),
+            "others": len(list(dict.fromkeys(others)))
+        },
+        "api_endpoints": {
+            "web": list(dict.fromkeys(api_web_lines)),
+            "mobile": list(dict.fromkeys(api_mob_lines))
+        },
+        "sql_files": [
+            {
+                "file": f,
+                "sha256": sql_files_data[f]["hashes"].get(sql_files_data[f]["branches"][-1], "")
+            }
+            for f in sorted(sql_files_data.keys())
+        ],
+        "warnings": warnings
+    }
+
+    if is_dry_run:
+        print("\n" + "=" * 60)
+        print(f" [DRY-RUN COMPLETE] Release '{version}' simulated successfully!")
+        print(f" Target Directory would be: {target_dir}")
+        print(f" - Branches to bundle:       {len(active_branches)}")
+        print(f" - Features / Fixes / Others: {len(features)} / {len(fixes)} / {len(others)}")
+        print(f" - SQL migration files:      {len(sql_files_data)}")
+        print(f" - Total warnings:           {len(warnings)}")
+        print(" (No files written to disk, marked_branches.txt preserved)")
+        print("=" * 60 + "\n")
+        sys.exit(0)
+
+    # Write files to disk (Item 2: Explicit UTF-8)
     with open(changelog_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(changelog_content)
 
-    # 8. Combine SQL files with deterministic sorting & collision detection (Item 6)
-    combined_sql_path = target_dir / "combined_db_scripts.sql"
-    combined_sql_text, warnings = format_combined_sql(sql_files_data, version, branches, now_str)
-    for w in warnings:
-        print(f"[COLLISION WARNING] {w}")
-
     with open(combined_sql_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(combined_sql_text)
+
+    with open(meta_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(meta_data, f, indent=2, ensure_ascii=False)
 
     # 9. Clean up marked_branches.txt
     marked_file.unlink(missing_ok=True)
@@ -545,7 +785,8 @@ def main():
     print(f" Target Directory: {target_dir}")
     print(f"   1. Changelog:     {changelog_path}")
     print(f"   2. Combined SQL:  {combined_sql_path}")
-    print(f"   3. Source List:   {branches_file}")
+    print(f"   3. Metadata JSON: {meta_path}")
+    print(f"   4. Source List:   {branches_file}")
     print("=" * 60)
     sys.exit(0)
 

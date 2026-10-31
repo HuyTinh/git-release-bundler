@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-31
+
+### Added
+- **SQL Safety Scanner**: Automated static analysis detecting `DROP TABLE/DATABASE`, `TRUNCATE`, and unconditioned `DELETE FROM` statements, injecting high-visibility warning banners and SHA-256 checksums in `combined_db_scripts.sql`.
+- **Reproducible Audit**: Formatted `branches.txt` recording commit SHA of each branch along with bundle generation timestamp.
+- **Categorized Changelog**: Section 1 now groups items into `🚀 Features`, `🐛 Bug Fixes`, and `🔧 Other Improvements`, stripping git trailers (`Co-authored-by`).
+- **Dry-Run Simulation**: `--dry-run` flag to preview full release changelog and SQL scripts without writing files to disk or clearing marked branches.
+- **Structured Metadata Export**: Produces `release_meta.json` containing complete machine-readable release information.
+- **Branch Health Guards**: Automatic detection and warnings for deleted local branches and branches already fully merged into the base branch.
+- **Documentation & Tooling**:
+  - Bilingual documentation: `README.md` (English) and `README.vi.md` (Vietnamese).
+  - Modern Cursor rule `.cursor/rules/release-bundler.mdc`.
+  - Realistic output samples in `examples/`.
+  - Added `git mark clear` and `git mark unmark` to cheat-sheets.
+
 ## [0.1.0] - 2026-10-31
 
 ### Added

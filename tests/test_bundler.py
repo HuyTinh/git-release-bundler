@@ -12,6 +12,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 from bundle_local import (
     validate_version_name,
     clean_commit_message,
+    categorize_commit,
+    scan_sql_safety,
     format_combined_sql,
     extract_api_endpoint,
     format_changelog,
@@ -302,4 +304,91 @@ class TestFormatChangelog:
         assert "### 2. New API Endpoints:" in content
         assert "*(No new API endpoints detected in commit messages)*" in content
         assert "*(No SQL migration scripts in this release)*" in content
+
+
+class TestCategorizeCommit:
+    """Item (7): Categorization of commit messages into Features, Fixes, Others."""
+
+    def test_feature_commits(self):
+        cat, clean = categorize_commit("feat: add export to excel")
+        assert cat == "features"
+        assert clean == "Add export to excel"
+
+        cat2, clean2 = categorize_commit("[PROJ-101] feat(api): create user endpoint")
+        assert cat2 == "features"
+        assert clean2 == "Create user endpoint"
+
+        cat3, clean3 = categorize_commit("add: new notification banner")
+        assert cat3 == "features"
+        assert clean3 == "New notification banner"
+
+    def test_fix_commits(self):
+        cat, clean = categorize_commit("fix(auth)!: resolve session expiration race condition")
+        assert cat == "fixes"
+        assert clean == "Resolve session expiration race condition"
+
+        cat2, clean2 = categorize_commit("hotfix: patch security vulnerability in parser")
+        assert cat2 == "fixes"
+        assert clean2 == "Patch security vulnerability in parser"
+
+    def test_other_commits_and_trailers(self):
+        cat, clean = categorize_commit("chore(deps): bump urllib3 from 1.26 to 2.0")
+        assert cat == "others"
+        assert clean == "Bump urllib3 from 1.26 to 2.0"
+
+        # Git trailer stripping
+        msg_with_trailer = "docs: update API guide\n\nCo-authored-by: Developer <dev@example.com>"
+        cat2, clean2 = categorize_commit(msg_with_trailer)
+        assert cat2 == "others"
+        assert "Co-authored-by" not in clean2
+        assert clean2 == "Update API guide"
+
+
+class TestScanSqlSafety:
+    """Item (3): SQL safety scanning for DROP, TRUNCATE, and unconditioned DELETE."""
+
+    def test_safe_sql(self):
+        safe_sql = """
+        -- Safe migration script
+        CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));
+        INSERT INTO users (id, name) VALUES (1, 'Alice');
+        UPDATE users SET name = 'Bob' WHERE id = 1;
+        DELETE FROM users WHERE id = 2;
+        """
+        warnings = scan_sql_safety(safe_sql)
+        assert warnings == []
+
+    def test_dangerous_drop(self):
+        sql = "DROP TABLE users; DROP DATABASE legacy_db;"
+        warnings = scan_sql_safety(sql)
+        assert len(warnings) == 2
+        assert any("DROP TABLE `users`" in w for w in warnings)
+        assert any("DROP DATABASE `legacy_db`" in w for w in warnings)
+
+    def test_dangerous_truncate(self):
+        sql = "TRUNCATE TABLE session_cache; TRUNCATE logs;"
+        warnings = scan_sql_safety(sql)
+        assert len(warnings) == 2
+        assert any("TRUNCATE TABLE `session_cache`" in w for w in warnings)
+        assert any("TRUNCATE TABLE `logs`" in w for w in warnings)
+
+    def test_dangerous_delete_without_where(self):
+        sql = """
+        -- Delete all records without WHERE clause!
+        DELETE FROM order_history;
+        """
+        warnings = scan_sql_safety(sql)
+        assert len(warnings) == 1
+        assert "HIGH SEVERITY DANGER: DELETE FROM `order_history` without WHERE clause" in warnings[0]
+
+    def test_commented_dangerous_commands_ignored(self):
+        sql = """
+        -- DROP TABLE temp_data;
+        /* TRUNCATE TABLE users; */
+        -- DELETE FROM orders;
+        CREATE TABLE safe (id INT);
+        """
+        warnings = scan_sql_safety(sql)
+        assert warnings == []
+
 

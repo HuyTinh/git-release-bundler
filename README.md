@@ -1,48 +1,50 @@
 # 📦 git-release-bundler
 
 > **Universal Local Release Toolkit & AI Agent Skills for Git**  
-> Mark branches, extract changes, compile combined database scripts, and generate 2-tier release notes — 100% locally with zero checkouts, zero remote clutter, and zero third-party dependencies.
+> Mark branches, extract changes, compile combined database scripts with safety guards, and generate 4-section release notes — 100% locally with zero checkouts, zero remote clutter, and zero third-party dependencies.
 
 [![CI](https://github.com/HuyTinh/git-release-bundler/actions/workflows/ci.yml/badge.svg)](https://github.com/HuyTinh/git-release-bundler/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/HuyTinh/git-release-bundler)](https://github.com/HuyTinh/git-release-bundler/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](#)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green.svg)](#)
-[![Release](https://img.shields.io/github/v/release/HuyTinh/git-release-bundler)](https://github.com/HuyTinh/git-release-bundler/releases)
+
+[📖 Đọc tài liệu Tiếng Việt (README.vi.md)](README.vi.md)
 
 ---
 
-## 🌟 Why `git-release-bundler`? / Tại sao cần?
+## 🌟 Why `git-release-bundler`?
 
-In modern software development (Agile / Sprint cycles), features and bugfixes are developed across multiple isolated branches (`feat/order`, `feat/payment`, `fix/auth`). When preparing a release candidate for UAT, Staging, or Deployment:
-1. You have to remember which branches belong to this release.
-2. You must manually hunt down SQL migration scripts (`*.sql`) across folders and concatenate them into one DB update script.
-3. You have to compile clean release notes for PO, QA, and Clients without committing clutter or pushing premature Git tags.
+In modern agile development, features and bugfixes are developed across multiple isolated branches (`feat/orders`, `fix/auth`, `feat/mobile-api`). When preparing a release candidate for QA, Staging, or Deployment:
+1. You need to remember which branches belong to this release without merging them prematurely.
+2. You must manually find and concatenate scattered `*.sql` database migrations in the correct order.
+3. You need clean, executive-ready release notes for Stakeholders and distinct API endpoint lists for Frontend & Mobile teams.
 
-**`git-release-bundler` provides a streamlined workflow to mark branches incrementally and compile complete release deliverables on demand.**
-
----
-
-## ⚡ Key Capabilities / Tính năng nổi bật
-
-- **100% Pure Local (Zero Remote Footprint)**: No git pushes, no git tags, no synthetic merge branches created on remote.
-- **Zero-Checkout Engine (`git show`)**: Extracts commits and database scripts directly from Git's internal Object Database. Never touches your working tree, dirty files, or uncommitted work.
-- **Structured 4-Section Changelog Standard**:
-  - **Section 1: Features & Business Highlights (Ready-to-copy)**: Strips technical commit prefixes (`feat:`, `fix(scope)!:`, Jira ticket IDs `[PROJ-123]`, `revert`) and deduplicates items into clean business-friendly bullet points for PO/QA/Stakeholders.
-  - **Section 2: New API Endpoints (Web & Mobile)**: Flat bulleted list of new endpoints (`METHOD /path` - description) grouped by **Web** and **Mobile**, optimized for 1-click copying without breaking chat formats. Automatically extracted from commits like `feat(api-web): POST /api/... - desc` or `api(mobile): GET /api/...`.
-  - **Section 3: Database Migrations**: Summary list of concatenated SQL migration scripts.
-  - **Section 4: Technical Audit**: Retains commit hashes `[%h]`, authors, and relative timestamps grouped by branch for developers.
-- **Deterministic SQL Compilation & Collision Guard**:
-  - Concatenates all `*.sql` files across any folder structure (`database/`, `migrations/`, `db/migration/`).
-  - Strict alphabetical path sorting guarantees consistent execution order.
-  - Content hashing (SHA-256) automatically deduplicates identical scripts and injects clear `[COLLISION WARNING]` alerts if branches introduce conflicting file contents.
-  - Automatically filters out deleted files (`--diff-filter=ACMR`).
-- **Working Tree Cleanliness**: Automatically appends `release_output/` to `.git/info/exclude`, keeping your working tree and `.gitignore` 100% untouched.
-- **Smart Accumulate & Fresh Overwrite**: Missed a branch? Mark the additional branch and re-run with the same version name — it merges old and new branches into an updated bundle. Pass `--fresh` (or `-fresh`) to overwrite from scratch.
-- **Cross-Platform & Cross-Agent**: Python 3.8+ Standard Library only (zero `pip install`). Compatible with **Antigravity**, **Claude Code**, **Cursor**, **Windsurf**, and standard **Terminal CLI**.
+**`git-release-bundler` automates this entire release preparation workflow locally in seconds with zero remote footprint.**
 
 ---
 
-## 🚀 Installation / Cài đặt
+## ⚡ Key Capabilities
+
+- **100% Pure Local (Zero Remote Footprint)**: No git pushes, no git tags, no temporary merge commits pushed to remote.
+- **Zero-Checkout Extraction (`git show`)**: Reads commits and database scripts directly from Git's object database. Never touches your working tree, dirty files, or uncommitted work.
+- **Standard 4-Section Changelog**:
+  - **Section 1: Features & Business Highlights (Ready-to-copy)**: Categorized into `🚀 Features`, `🐛 Bug Fixes`, and `🔧 Other Improvements`, stripped of technical prefixes and trailers (`Co-authored-by`).
+  - **Section 2: New API Endpoints (Web & Mobile)**: Flat, copyable bulleted list grouped by Web and Mobile.
+  - **Section 3: Database Migrations**: List of compiled SQL files with SHA-256 checksums and safety notices.
+  - **Section 4: Technical Audit**: Detailed commit hashes `[%h]`, authors, and relative timestamps grouped by branch.
+- **SQL Safety & Collision Scanner**:
+  - Automatically flags potentially destructive statements (`DROP TABLE/DATABASE`, `TRUNCATE`, `DELETE FROM` without `WHERE`).
+  - Strict alphabetical path sorting guarantees deterministic execution order.
+  - SHA-256 hashing detects and alerts on cross-branch SQL file content collisions (`[COLLISION WARNING]`).
+- **Reproducible Audit**: Records commit SHAs and generation timestamp in `branches.txt`.
+- **Structured Metadata Export**: Produces `release_meta.json` for CI/CD or automated tooling.
+- **Dry-Run Simulation**: `--dry-run` simulates the bundle without writing files to disk or clearing marked branches.
+- **Cross-Platform & Cross-Agent**: Python 3.8+ Standard Library only (zero `pip install`). Compatible with **Antigravity**, **Claude Code**, **Cursor**, **Windsurf**, and standard terminal shells.
+
+---
+
+## 🚀 Quick Start & Installation
 
 ### 1. Clone the repository
 ```bash
@@ -63,41 +65,44 @@ chmod +x install.sh
 ./install.sh
 ```
 
-The installer automatically:
-1. Verifies Python >= 3.8 is available.
-2. Deploys agent skills to `~/.gemini/config/skills/` (and `~/.claude/skills/` if Claude Code is installed).
-3. Registers global Git aliases (`git mark`, `git bundle-local`) with safe argument forwarding (`"$@"`), warning if aliases already exist.
+The installer verifies Python >= 3.8, deploys skills to `~/.gemini/config/skills/` (and `~/.claude/skills/` if Claude Code exists), and configures global Git aliases (`git mark`, `git bundle-local`).
 
-*(To cleanly uninstall anytime: `./uninstall.ps1` or `./uninstall.sh`)*
+*(To uninstall anytime: `./uninstall.ps1` or `./uninstall.sh`)*
 
 ---
 
-## 📖 Usage Guide / Hướng dẫn sử dụng
+## 📖 Usage Guide
 
-### 1. In Terminal (PowerShell / Git Bash / Zsh)
+### 1. In Terminal
 
 ```bash
 # 1. Mark the branch you just finished:
 git mark
 
 # Or mark a specific branch without checking it out:
-git mark feat/order-service
+git mark feat/orders-export
 
 # 2. View all currently marked branches:
 git mark list
 
 # 3. Unmark a branch if needed:
-git mark unmark feat/order-service
+git mark unmark feat/orders-export
 
-# 4. Compile the release bundle:
-git bundle-local uat-1.1.3
+# 4. Clear the marked list completely:
+git mark clear
 
-# Options:
-# Recompile cleanly from scratch without merging previously bundled branches:
-git bundle-local uat-1.1.3 --fresh
+# 5. Compile the release bundle:
+git bundle-local uat-1.2.0
 
-# Specify a custom base branch for diffing (default: develop or main):
-git bundle-local uat-1.1.3 --base master
+# Optional flags:
+# Preview bundle without writing files or clearing marked list:
+git bundle-local uat-1.2.0 --dry-run
+
+# Overwrite target release bundle cleanly from scratch:
+git bundle-local uat-1.2.0 --fresh
+
+# Specify custom base branch (default: develop or main):
+git bundle-local uat-1.2.0 --base staging
 ```
 
 ---
@@ -111,105 +116,55 @@ git bundle-local uat-1.1.3 --base master
 | `/git-mark list` | Display numbered list of marked branches |
 | `/git-mark unmark <branch>` | Remove a branch from the list |
 | `/git-mark clear` | Clear the marked list |
-| `/bundle-local <version>` | Compile changelog & SQL scripts (e.g. `/bundle-local uat-1.1.3`) |
+| `/bundle-local <version>` | Compile changelog & SQL scripts (e.g. `/bundle-local uat-1.2.0`) |
+| `/bundle-local <version> --dry-run` | Preview without writing files |
 | `/bundle-local <version> --fresh` | Overwrite target release bundle from scratch |
 
 ---
 
-## 🔍 Base Branch Diffing & Git Resolution
+## 📂 Generated Release Output Structure
 
-Understanding how `git-release-bundler` determines changes between branches:
-
-### Base Branch Detection
-- By default, the bundler inspects the repository for `develop` or `main` (in that order).
-- You can override this using the `--base <branch>` / `-b <branch>` CLI option.
-
-### Merge-Base Calculation
-- Changes are computed using `git merge-base <base> <branch>`. Only commits and SQL file modifications made on the branch since diverging from the common ancestor are collected (`git log <merge-base>..<branch>` and `git diff <merge-base>..<branch>`).
-
-### Squash-Merged Branches
-- If a branch was already squash-merged into the base branch, `git log <merge-base>..<branch>` still correctly reflects individual commit messages from the local feature branch for documentation purposes. If the SQL files are identical to base, `git diff` produces an empty changeset as expected.
-
-### Remote-Only Branches
-- `git mark` operates on local Git references.
-- If a branch only exists on remote (`origin/feat/xy`), create a local tracking branch first:
-  ```bash
-  git checkout --track origin/feat/xy
-  # Or:
-  git branch feat/xy origin/feat/xy
-  ```
-- If a marked branch cannot be resolved locally at bundling time, a warning is printed (`[WARN] Branch '<name>' could not be resolved locally. Skipping.`), and the tool continues processing remaining branches.
-
-### Deleted Branches
-- If a branch is deleted after being marked, it is gracefully skipped during bundling and automatically purged when the state file resets.
-
----
-
-## 📂 State & Output Directory Structure
-
-### State Storage
-- Marked branches are stored in `.git/marked_branches.txt` inside your repository.
-- This file is strictly repository-local, invisible to `git status`, and safely removed once `git bundle-local` finishes successfully.
-
-### Output Structure
-When a bundle is generated, output files are written to:
 ```text
-# If the repo contains a .antigravity directory:
-.antigravity/
-└── release_output/
-    └── uat-1.1.3/                      <-- Release version directory
-        ├── branches.txt                <-- Source branches recorded
-        ├── CHANGELOG_LOCAL.md          <-- 2-tier Changelog
-        └── combined_db_scripts.sql     <-- Compiled SQL migrations
-
-# Standard repository:
 release_output/
-└── uat-1.1.3/
-    ├── branches.txt
-    ├── CHANGELOG_LOCAL.md
-    └── combined_db_scripts.sql
+└── uat-1.2.0/
+    ├── branches.txt                <-- Source branches with commit SHAs & timestamp
+    ├── CHANGELOG_LOCAL.md          <-- 4-section changelog (Features, APIs, DB, Audit)
+    ├── combined_db_scripts.sql     <-- Compiled SQL migrations with safety headers
+    └── release_meta.json           <-- Machine-readable release metadata
 ```
 
-The output directory `release_output/` is automatically added to `.git/info/exclude` to guarantee zero uncommitted noise in your repository.
+*(If the project contains a `.antigravity` folder, the bundle is automatically placed in `.antigravity/release_output/` and excluded via `.git/info/exclude`)*.
+
+👉 Check out the [examples/](examples/) directory to see real sample outputs!
 
 ---
 
-## 🤖 Cross-Agent Setup (Cursor / Windsurf / Claude Code)
+## 🤖 Cursor Integration (.cursor/rules/)
 
-- **Claude Code**: The installer automatically copies skills to `~/.claude/skills` if Claude Code exists.
-- **Cursor / Windsurf**: Add the following instruction to `.cursorrules` or `.windsurfrules`:
-  ```text
-  When asked to bundle a release or when the user invokes /bundle-local <version>,
-  execute the global Git alias:
-    git bundle-local "<version>"
-  Or execute directly via Python:
-    python -m bundle_local "<version>"
-  ```
-- **Plain Terminal**: Execute `git mark` and `git bundle-local` in any terminal without AI tools.
+For Cursor IDE users, copy `.cursor/rules/release-bundler.mdc` into your project's `.cursor/rules/` directory for automatic agent awareness.
 
 ---
 
-## 🛠️ Troubleshooting
+## 🔒 Security & Limitations
 
-| Issue | Cause | Solution |
-| :--- | :--- | :--- |
-| `[ERROR] Python 3.8 or higher is required` | Python version is older than 3.8 or not installed. | Upgrade Python to version 3.8 or newer and ensure `python` is added to your system `PATH`. |
-| `[ERROR] No branches currently marked` | Attempted to bundle before marking branches. | Run `git mark` or `git mark <branch_name>` first. |
-| `[SECURITY ERROR] Invalid version name` | Version name contains illegal characters, spaces, or traversal `..`. | Use alphanumeric characters, dots, dashes, and underscores only (e.g. `uat-1.1.3`, `v2.0.0-rc1`). |
-| `[WARN] SQL file '...' has differing contents` | Multiple branches modified the same SQL script with different code. | Review the collision warning in `combined_db_scripts.sql` header and verify which branch version to keep. |
-| `[WARN] Git alias 'mark' already exists` | An alias with the same name was configured earlier. | The installer will prompt or overwrite with the new alias definition. |
-| Exit code 2 returned | Usage error or missing precondition (empty repo, no branches). | Check terminal output message for required action. |
+### SQL Safety Scanner
+`git-release-bundler` actively inspects SQL scripts for catastrophic commands (`DROP TABLE/DATABASE`, `TRUNCATE`, `DELETE FROM` without `WHERE`). If found, it injects a high-visibility warning banner in `combined_db_scripts.sql` and logs an alert to stderr.
 
----
-
-## ⚠️ Limitations
-
-1. **Local Branch Requirement**: Branches must be accessible as local Git references. Fetch remote branches before marking if needed.
-2. **SQL Execution Ordering**: Scripts are ordered deterministically by file path. To ensure proper dependency order, use standard migration naming conventions (e.g., `V001__init.sql`, `V002__add_users.sql`).
-3. **Git Repository Root**: Must be executed within a valid Git repository.
+### Limitations
+1. **Local Branch Availability**: Branches must be accessible as local Git references (run `git checkout --track origin/<branch>` if remote-only).
+2. **Git Repository Root**: Must be executed inside a Git repository.
+3. **No Automatic Database Execution**: This tool compiles scripts; it does not connect to or execute SQL against live databases.
 
 ---
 
-## 📄 License & Author
+## 🤝 Contributing & License
+
+Contributions, bug reports, and pull requests are welcome!
+To run tests locally:
+```bash
+pip install pytest
+pytest tests/test_bundler.py -v
+```
+
 Released under the [MIT License](LICENSE).  
 Author: [HuyTinh](https://github.com/HuyTinh)
