@@ -26,9 +26,11 @@ In modern software development (Agile / Sprint cycles), features and bugfixes ar
 
 - **100% Pure Local (Zero Remote Footprint)**: No git pushes, no git tags, no synthetic merge branches created on remote.
 - **Zero-Checkout Engine (`git show`)**: Extracts commits and database scripts directly from Git's internal Object Database. Never touches your working tree, dirty files, or uncommitted work.
-- **Industry Standard 2-Tier Changelog**:
-  - **Tier 1 (Ready-to-copy)**: Strips technical commit prefixes (`feat:`, `fix(scope)!:`, Jira ticket IDs `[PROJ-123]`, `revert`) and deduplicates items into clean business-friendly bullet points for PO/QA/Stakeholders.
-  - **Tier 2 (Technical Audit)**: Retains commit hashes `[%h]`, authors, and relative timestamps grouped by branch for developers.
+- **Structured 4-Section Changelog Standard**:
+  - **Section 1: Features & Business Highlights (Ready-to-copy)**: Strips technical commit prefixes (`feat:`, `fix(scope)!:`, Jira ticket IDs `[PROJ-123]`, `revert`) and deduplicates items into clean business-friendly bullet points for PO/QA/Stakeholders.
+  - **Section 2: New API Endpoints (Web & Mobile)**: Flat bulleted list of new endpoints (`METHOD /path` - description) grouped by **Web** and **Mobile**, optimized for 1-click copying without breaking chat formats. Automatically extracted from commits like `feat(api-web): POST /api/... - desc` or `api(mobile): GET /api/...`.
+  - **Section 3: Database Migrations**: Summary list of concatenated SQL migration scripts.
+  - **Section 4: Technical Audit**: Retains commit hashes `[%h]`, authors, and relative timestamps grouped by branch for developers.
 - **Deterministic SQL Compilation & Collision Guard**:
   - Concatenates all `*.sql` files across any folder structure (`database/`, `migrations/`, `db/migration/`).
   - Strict alphabetical path sorting guarantees consistent execution order.

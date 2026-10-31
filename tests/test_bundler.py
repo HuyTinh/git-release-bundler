@@ -13,6 +13,8 @@ from bundle_local import (
     validate_version_name,
     clean_commit_message,
     format_combined_sql,
+    extract_api_endpoint,
+    format_changelog,
 )
 
 
@@ -206,3 +208,98 @@ class TestFormatCombinedSql:
         assert "Using version from 'feat/beta'" in sql_text
         # Content from chosen (latest) branch
         assert "ALTER TABLE items ADD COLUMN price_vnd BIGINT;" in sql_text
+
+
+class TestExtractApiEndpoint:
+    """Tests for API endpoint detection from commit messages."""
+
+    @pytest.mark.parametrize("msg, expected_platform, expected_line", [
+        (
+            "feat(api-web): POST /api/v1/orders/export-excel - Xuất báo cáo đơn hàng ra Excel",
+            "web",
+            "`POST /api/v1/orders/export-excel` - Xuất báo cáo đơn hàng ra Excel"
+        ),
+        (
+            "api(mobile): GET /api/v1/notifications",
+            "mobile",
+            "`GET /api/v1/notifications`"
+        ),
+        (
+            "[PROJ-123] feat(web-api): PUT /api/v1/profile: Cập nhật thông tin",
+            "web",
+            "`PUT /api/v1/profile` - Cập nhật thông tin"
+        ),
+        (
+            "feat(api/mob)!: DELETE /api/v1/devices/{id} - Xóa thiết bị",
+            "mobile",
+            "`DELETE /api/v1/devices/{id}` - Xóa thiết bị"
+        ),
+        (
+            "api(mob): POST /api/v1/payments/retry",
+            "mobile",
+            "`POST /api/v1/payments/retry`"
+        ),
+    ])
+    def test_extract_valid_api_endpoints(self, msg: str, expected_platform: str, expected_line: str):
+        res = extract_api_endpoint(msg)
+        assert res is not None
+        platform, formatted = res
+        assert platform == expected_platform
+        assert formatted == expected_line
+
+    @pytest.mark.parametrize("non_api_msg", [
+        "feat: update user avatar",
+        "fix(auth): resolve session expiration",
+        "docs: update README",
+        "api: not following endpoint format",
+        "feat(api): missing method and path",
+    ])
+    def test_ignore_non_api_commits(self, non_api_msg: str):
+        assert extract_api_endpoint(non_api_msg) is None
+
+
+class TestFormatChangelog:
+    """Tests for 4-section changelog formatting."""
+
+    def test_format_changelog_with_apis_and_sql(self):
+        content = format_changelog(
+            version="uat-1.1.0",
+            base_branch="develop",
+            branches=["feat/orders", "fix/pay"],
+            now_str="2026-10-31 16:30:00",
+            business_lines=["- Add export capability", "- Fix payment timeout"],
+            api_web_lines=["`POST /api/v1/orders/export` - Export to Excel"],
+            api_mob_lines=["`POST /api/v1/mobile/pay/retry` - Retry payment"],
+            sql_files=["migrations/01_init.sql", "migrations/02_orders.sql"],
+            branch_commit_blocks=["#### Branch: `feat/orders`\n- [abc] feat: add orders"]
+        )
+
+        assert "# Release Changelog: uat-1.1.0" in content
+        assert "### 1. Features & Business Highlights (Ready-to-copy):" in content
+        assert "- Add export capability" in content
+        assert "### 2. New API Endpoints:" in content
+        assert "**Web:**" in content
+        assert "`POST /api/v1/orders/export` - Export to Excel" in content
+        assert "**Mobile:**" in content
+        assert "`POST /api/v1/mobile/pay/retry` - Retry payment" in content
+        assert "### 3. Database Migrations:" in content
+        assert "`combined_db_scripts.sql` (2 files compiled: 01_init.sql, 02_orders.sql)" in content
+        assert "### 4. Technical Audit (Commits by branch):" in content
+
+    def test_format_changelog_empty_apis(self):
+        content = format_changelog(
+            version="hotfix-1.0.1",
+            base_branch="main",
+            branches=["fix/bug"],
+            now_str="2026-10-31 16:30:00",
+            business_lines=["- Fix critical bug"],
+            api_web_lines=[],
+            api_mob_lines=[],
+            sql_files=[],
+            branch_commit_blocks=["#### Branch: `fix/bug`\n- [def] fix: critical bug"]
+        )
+
+        assert "### 2. New API Endpoints:" in content
+        assert "*(No new API endpoints detected in commit messages)*" in content
+        assert "*(No SQL migration scripts in this release)*" in content
+

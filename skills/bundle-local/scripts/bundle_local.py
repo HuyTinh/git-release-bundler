@@ -100,6 +100,121 @@ def validate_version_name(version: str) -> bool:
     return True
 
 
+API_COMMIT_PATTERN = re.compile(
+    r'^(?:\[[A-Za-z0-9_\-]+\]\s*)?'
+    r'(?:[A-Za-z0-9_\-]+-\d+:\s*)?'
+    r'(?:feat|add|update|fix|api)?'
+    r'\(.*?(web|mob|mobile).*?\)!?:\s*'
+    r'([A-Z]+)\s+([/\w\-{}\.]+)'
+    r'(?:\s*[-:]\s*(.*))?$',
+    re.IGNORECASE
+)
+
+
+def extract_api_endpoint(msg: str) -> tuple[str, str] | None:
+    """
+    Extracts API method, path, and description from conventional commit messages.
+    Returns (platform, formatted_line) where platform is 'web' or 'mobile'.
+    Examples:
+      feat(api-web): POST /api/v1/orders/export-excel - Xuất báo cáo đơn hàng ra Excel
+        -> ("web", "`POST /api/v1/orders/export-excel` - Xuất báo cáo đơn hàng ra Excel")
+      api(mobile): GET /api/v1/notifications
+        -> ("mobile", "`GET /api/v1/notifications`")
+    """
+    m = API_COMMIT_PATTERN.match(msg.strip())
+    if not m:
+        return None
+    raw_plat, method, path, desc = m.groups()
+    platform = "mobile" if "mob" in raw_plat.lower() else "web"
+    method_upper = method.upper()
+    formatted = f"`{method_upper} {path}`"
+    if desc and desc.strip():
+        formatted += f" - {desc.strip()}"
+    return platform, formatted
+
+
+def format_changelog(
+    version: str,
+    base_branch: str,
+    branches: list[str],
+    now_str: str,
+    business_lines: list[str],
+    api_web_lines: list[str],
+    api_mob_lines: list[str],
+    sql_files: list[str],
+    branch_commit_blocks: list[str]
+) -> str:
+    """
+    Builds the standardized 4-section CHANGELOG_LOCAL.md:
+      1. Features & Business Highlights (Ready-to-copy)
+      2. New API Endpoints (Web & Mobile)
+      3. Database Migrations
+      4. Technical Audit (Commits by branch)
+    """
+    lines = [
+        f"# Release Changelog: {version}",
+        f"- **Created at:** {now_str}",
+        f"- **Base branch:** `{base_branch}`",
+        f"- **Branch count:** {len(branches)}",
+        "",
+        "---",
+        "",
+        "### 1. Features & Business Highlights (Ready-to-copy):"
+    ]
+
+    unique_business = list(dict.fromkeys(business_lines))
+    if unique_business:
+        lines.extend(unique_business)
+    else:
+        lines.append("- *(No feature commit messages detected)*")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("### 2. New API Endpoints:")
+
+    unique_web = list(dict.fromkeys(api_web_lines))
+    unique_mob = list(dict.fromkeys(api_mob_lines))
+
+    if not unique_web and not unique_mob:
+        lines.append("- *(No new API endpoints detected in commit messages)*")
+    else:
+        lines.append("")
+        lines.append("**Web:**")
+        if unique_web:
+            for item in unique_web:
+                lines.append(f"- {item}")
+        else:
+            lines.append("- *(None)*")
+
+        lines.append("")
+        lines.append("**Mobile:**")
+        if unique_mob:
+            for item in unique_mob:
+                lines.append(f"- {item}")
+        else:
+            lines.append("- *(None)*")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("### 3. Database Migrations:")
+    if sql_files:
+        sorted_sql = sorted(sql_files)
+        lines.append(f"- `combined_db_scripts.sql` ({len(sorted_sql)} files compiled: {', '.join(Path(f).name for f in sorted_sql)})")
+    else:
+        lines.append("- *(No SQL migration scripts in this release)*")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("### 4. Technical Audit (Commits by branch):")
+    lines.append("")
+    lines.append("\n".join(branch_commit_blocks))
+
+    return "\n".join(lines) + "\n"
+
+
 def ensure_git_exclude(git_dir: Path, ignore_entry: str):
     """Item (7): Add output directory to .git/info/exclude to protect working tree."""
     try:
@@ -335,16 +450,10 @@ def main():
 
     # 7. Collect Commits (Changelog) & SQL files
     now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    changelog_lines = [
-        f"# Release Changelog: {version}",
-        f"- **Created at:** {now_str}",
-        f"- **Base branch:** `{base_branch}`",
-        f"- **Branch count:** {len(branches)}",
-        "",
-        "### Features & Business Highlights (Ready-to-copy):"
-    ]
 
     business_lines = []
+    api_web_lines = []
+    api_mob_lines = []
     branch_commit_blocks = []
 
     # Map: sql_file_path -> dict(hashes={branch: sha256}, contents={branch: str}, branches=[])
@@ -364,6 +473,15 @@ def main():
         code, commits_raw = run_git(["log", f"{merge_base}..{b}", "--no-merges", "--format=%s"])
         if code == 0 and commits_raw:
             for cmsg in commits_raw.splitlines():
+                # Extract API endpoint if formatted
+                api_info = extract_api_endpoint(cmsg)
+                if api_info:
+                    plat, api_entry = api_info
+                    if plat == "web":
+                        api_web_lines.append(api_entry)
+                    else:
+                        api_mob_lines.append(api_entry)
+
                 clean_msg = clean_commit_message(cmsg)
                 if clean_msg:
                     business_lines.append(f"- {clean_msg}")
@@ -394,23 +512,21 @@ def main():
                 sql_files_data[sql_f]["hashes"][b] = content_hash
                 sql_files_data[sql_f]["contents"][b] = content
 
-    # Deduplicate business summary
-    unique_business = list(dict.fromkeys(business_lines))
-    if unique_business:
-        changelog_lines.extend(unique_business)
-    else:
-        changelog_lines.append("- *(No feature commit messages detected)*")
-
-    changelog_lines.append("")
-    changelog_lines.append("---")
-    changelog_lines.append("### Technical Audit (Commits by branch):")
-    changelog_lines.append("")
-    changelog_lines.append("\n".join(branch_commit_blocks))
-
     # Write Changelog (Item 2: Explicit UTF-8)
     changelog_path = target_dir / "CHANGELOG_LOCAL.md"
+    changelog_content = format_changelog(
+        version=version,
+        base_branch=base_branch,
+        branches=branches,
+        now_str=now_str,
+        business_lines=business_lines,
+        api_web_lines=api_web_lines,
+        api_mob_lines=api_mob_lines,
+        sql_files=list(sql_files_data.keys()),
+        branch_commit_blocks=branch_commit_blocks
+    )
     with open(changelog_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(changelog_lines) + "\n")
+        f.write(changelog_content)
 
     # 8. Combine SQL files with deterministic sorting & collision detection (Item 6)
     combined_sql_path = target_dir / "combined_db_scripts.sql"
