@@ -1,16 +1,29 @@
 # ==============================================================================
-# git-release-bundler: 1-Click Installer
+# git-release-bundler: 1-Click Installer (Windows PowerShell)
 # ==============================================================================
 [CmdletBinding()]
 param()
 
 $ErrorActionPreference = "Stop"
 
+# 1. Verify Python installation
+$pythonCmd = "python"
+$null = Get-Command python -ErrorAction SilentlyContinue
+if (-not $?) {
+    $null = Get-Command py -ErrorAction SilentlyContinue
+    if ($?) {
+        $pythonCmd = "py"
+    } else {
+        Write-Error "[ERROR] Python is not installed or not found in PATH. Please install Python 3."
+        exit 1
+    }
+}
+
 $currentDir = $PSScriptRoot
 $skillsSourceDir = Join-Path $currentDir "skills"
 
 if (-not (Test-Path $skillsSourceDir)) {
-    Write-Error "[ERROR] Khong tim thay thu muc 'skills' trong thu muc hien tai."
+    Write-Error "[ERROR] 'skills' directory not found in: $currentDir"
     exit 1
 }
 
@@ -22,10 +35,11 @@ if (-not $userHome) {
 $geminiSkillsDir = Join-Path $userHome ".gemini\config\skills"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host " Installing git-release-bundler..." -ForegroundColor Cyan
+Write-Host " Installing git-release-bundler (Python Engine)..." -ForegroundColor Cyan
+Write-Host " Detected Python command: $pythonCmd" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# 1. Copy skills to ~/.gemini/config/skills/
+# 2. Copy skills to ~/.gemini/config/skills/
 $targetGitMark = Join-Path $geminiSkillsDir "git-mark"
 $targetBundleLocal = Join-Path $geminiSkillsDir "bundle-local"
 
@@ -36,12 +50,12 @@ Copy-Item -Path (Join-Path $skillsSourceDir "bundle-local\*") -Destination $targ
 
 Write-Host " [OK] Installed skills to: $geminiSkillsDir" -ForegroundColor Green
 
-# 2. Configure Git Aliases globally
-$markScript = (Join-Path $targetGitMark "scripts\mark.ps1").Replace('\', '/')
-$bundleScript = (Join-Path $targetBundleLocal "scripts\bundle-local.ps1").Replace('\', '/')
+# 3. Configure Git Aliases globally using Python
+$markScript = (Join-Path $targetGitMark "scripts\mark.py").Replace('\', '/')
+$bundleScript = (Join-Path $targetBundleLocal "scripts\bundle_local.py").Replace('\', '/')
 
-$markCmd = "!powershell -NoProfile -ExecutionPolicy Bypass -File `"$markScript`""
-$bundleCmd = "!f() { powershell -NoProfile -ExecutionPolicy Bypass -File `"$bundleScript`" -Version `"`$1`" -ModeOrBase `"`$2`"; }; f"
+$markCmd = "!$pythonCmd `"$markScript`""
+$bundleCmd = "!f() { $pythonCmd `"$bundleScript`" `"`$1`" `"`$2`"; }; f"
 
 & git config --global alias.mark $markCmd
 & git config --global alias.git-mark $markCmd
@@ -53,9 +67,9 @@ Write-Host "      - git git-mark"
 Write-Host "      - git bundle-local"
 
 Write-Host "`n==========================================================" -ForegroundColor Green
-Write-Host " SUCCESS! git-release-bundler da duoc cai dat thanh cong!" -ForegroundColor Green
-Write-Host " Ban co the su dung ngay bay gio tren Terminal hoac AI Chat:" -ForegroundColor Green
-Write-Host "   1. git mark              (hoac trong Chat: /git-mark)"
-Write-Host "   2. git mark list         (hoac trong Chat: /git-mark list)"
-Write-Host "   3. git bundle-local <ver>(hoac trong Chat: /bundle-local <ver>)"
+Write-Host " SUCCESS! git-release-bundler installed successfully!" -ForegroundColor Green
+Write-Host " You can now use it anywhere via Terminal or AI Chat:" -ForegroundColor Green
+Write-Host "   1. git mark              (or in Chat: /git-mark)"
+Write-Host "   2. git mark list         (or in Chat: /git-mark list)"
+Write-Host "   3. git bundle-local <ver>(or in Chat: /bundle-local <ver>)"
 Write-Host "==========================================================" -ForegroundColor Green

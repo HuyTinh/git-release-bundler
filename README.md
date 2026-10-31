@@ -1,105 +1,110 @@
 # 📦 git-release-bundler
 
 > **Universal Local Release Toolkit & AI Agent Skills for Git**  
-> Mark branches, extract changes, compile combined database scripts, and generate 2-tier release notes — 100% locally with zero checkouts and zero remote clutter.
+> Mark branches, extract changes, compile combined database scripts, and generate 2-tier release notes — 100% locally with zero checkouts, zero remote clutter, and zero third-party dependencies.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Cross--Agent-green.svg)](#)
+[![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](#)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green.svg)](#)
 
 ---
 
-## 🌟 Tại sao cần `git-release-bundler`? (Why?)
+## 🌟 Why `git-release-bundler`? / Tại sao cần?
 
-Khi làm việc trong các dự án thực tế (đặc biệt là theo mô hình Agile/Sprint), các tính năng thường được phát triển trên nhiều nhánh độc lập (`feat/order`, `feat/payment`, `fix/auth`). Đến ngày đóng gói release hoặc bàn giao UAT/Staging:
-1. Bạn phải tự nhớ xem đợt này release những nhánh nào.
-2. Bạn phải lục từng nhánh để copy các file migration SQL (`*.sql`) rồi ghép thủ công thành 1 file chạy DB.
-3. Bạn phải tổng hợp commit message từ nhiều nhánh để viết Release Changelog gửi PO/QA.
-4. Bạn không muốn tạo nhánh merge lung tung hay push tag rác lên remote Git.
+In modern software development (Agile / Sprint cycles), features and bugfixes are developed across multiple isolated branches (`feat/order`, `feat/payment`, `fix/auth`). When preparing a release candidate for UAT, Staging, or Deployment:
+1. You have to remember which branches belong to this release.
+2. You must manually hunt down SQL migration scripts (`*.sql`) across folders and concatenate them into one DB update script.
+3. You have to compile clean release notes for PO, QA, and Clients without committing clutter or pushing premature Git tags.
 
-**`git-release-bundler` giải quyết trọn vẹn quy trình này chỉ với 2 lệnh!**
-
----
-
-## ⚡ Tính năng nổi bật (Features)
-
-- **100% Thuần Local (Zero Remote Footprint)**: Không push remote, không tạo tag, không tạo nhánh merge ảo.
-- **Không bao giờ Checkout (`git show` engine)**: Đọc commit và trích xuất file SQL trực tiếp từ Git Object Database. Không làm bẩn working tree hay conflict code đang viết dở.
-- **Format Changelog 2 tầng chuẩn công nghiệp**:
-  - **Tầng 1 (Ready-to-copy)**: Tự động loại bỏ tiền tố kỹ thuật (`feat:`, `fix:`, `[TICKET-123]`) và khử trùng lặp $\rightarrow$ Dạng gạch đầu dòng nghiệp vụ sạch sẽ để gửi ngay cho PO/QA/Khách hàng.
-  - **Tầng 2 (Technical Audit)**: Lưu đầy đủ commit hash `[%h]`, tác giả và thời gian để dev tra cứu.
-- **Ghép Database Scripts thông minh**: Tự động gom đệ quy mọi file `*.sql` phát sinh trên các nhánh, bọc comment nguồn gốc rõ ràng, tự động loại bỏ các file đã bị xóa (`--diff-filter=ACMR`).
-- **Smart Accumulate**: Nếu phát hiện thiếu nhánh sau khi đã tạo release, chỉ cần mark thêm nhánh mới và trigger lại cùng tên phiên bản $\rightarrow$ Tự động gộp nhánh cũ + mới. Có cờ `-fresh` nếu muốn làm mới từ đầu.
-- **Đa nền tảng AI Agent**: Chạy mượt mà trên cả **Terminal** lẫn trong **Chat của AI Agent** (Antigravity, Claude Code, Cursor, Windsurf, Cline...).
+**`git-release-bundler` automates this entire preparation workflow locally with 2 simple commands!**
 
 ---
 
-## 🚀 Cài đặt nhanh (Quick Installation)
+## ⚡ Key Capabilities / Tính năng nổi bật
 
-Mở PowerShell tại thư mục repo và chạy:
+- **100% Pure Local (Zero Remote Footprint)**: No git pushes, no git tags, no synthetic merge branches created on remote.
+- **Zero-Checkout Engine (`git show`)**: Extracts commits and database scripts directly from Git's internal Object Database. Never touches your working tree, dirty files, or uncommitted work.
+- **Industry Standard 2-Tier Changelog**:
+  - **Tier 1 (Ready-to-copy)**: Strips technical commit prefixes (`feat:`, `fix:`, Jira ticket IDs `[PROJ-123]`) and deduplicates items into clean business-friendly bullet points for PO/QA/Stakeholders.
+  - **Tier 2 (Technical Audit)**: Retains commit hashes `[%h]`, authors, and relative timestamps grouped by branch for developers.
+- **Recursive Database Script Compilation**: Combines all `*.sql` files across any folder structure (`database/`, `migrations/`, `db/migration/`), with clear branch source headers and automatic exclusion of deleted files (`--diff-filter=ACMR`).
+- **Smart Accumulate**: Missed a branch? Just mark the additional branch and re-run the same version name — it automatically merges old and new branches into an updated bundle. Use `-fresh` if you want to overwrite from scratch.
+- **Cross-Platform & Cross-Agent**: Python 3 Standard Library only (zero `pip install`). Compatible with **Antigravity**, **Claude Code**, **Cursor**, **Windsurf**, and standard **Terminal CLI**.
 
+---
+
+## 🚀 1-Click Installation / Cài đặt nhanh
+
+### On Windows (PowerShell):
 ```powershell
 ./install.ps1
 ```
 
-Script sẽ tự động:
-1. Copy các skill vào thư mục `~/.gemini/config/skills/`.
-2. Đăng ký các Git Alias toàn cục (`git mark`, `git bundle-local`).
+### On macOS / Linux (Bash / Zsh):
+```bash
+chmod +x install.sh
+./install.sh
+```
 
-*(Muốn gỡ cài đặt sạch sẽ bất cứ lúc nào: `./uninstall.ps1`)*
+The installer automatically:
+1. Deploys skills to `~/.gemini/config/skills/`.
+2. Registers global Git aliases (`git mark`, `git git-mark`, `git bundle-local`).
+
+*(To cleanly uninstall anytime: `./uninstall.ps1` or `./uninstall.sh`)*
 
 ---
 
-## 📖 Hướng dẫn sử dụng (Usage)
+## 📖 Usage Guide / Hướng dẫn sử dụng
 
-### Cách 1: Sử dụng trong Terminal (PowerShell / Git Bash)
+### 1. In Terminal (PowerShell / Git Bash / Zsh)
 
 ```bash
-# 1. Đang đứng ở nhánh nào muốn release, chỉ cần gõ:
+# 1. Mark the branch you just finished:
 git mark
 
-# Hoặc đánh dấu một nhánh cụ thể kể cả khi chưa checkout:
+# Or mark a specific branch without checking it out:
 git mark feat/order-service
 
-# 2. Xem danh sách các nhánh đang chờ:
+# 2. View all currently marked branches:
 git mark list
 
-# 3. Gỡ bớt 1 nhánh ra khỏi danh sách nếu cần:
+# 3. Unmark a branch if needed:
 git mark unmark feat/order-service
 
-# 4. Gom Changelog và Database Script vào thư mục phiên bản:
+# 4. Compile the release bundle:
 git bundle-local uat-1.1.3
 
-# (Tùy chọn: Làm mới hoàn toàn phiên bản đó, không gộp nhánh cũ)
+# (Optional: Recompile cleanly without merging previous branches)
 git bundle-local uat-1.1.3 -fresh
 ```
 
 ---
 
-### Cách 2: Sử dụng trong Chat với AI Agent (Antigravity / Gemini CLI)
+### 2. In AI Agent Chat (Antigravity / Gemini CLI)
 
-| Lệnh Chat | Chức năng |
+| Chat Command | Description |
 | :--- | :--- |
-| `/git-mark` hoặc `/mark` | Đánh dấu nhánh hiện tại |
-| `/git-mark <tên_nhánh>` | Đánh dấu nhánh chỉ định |
-| `/git-mark list` | Hiển thị danh sách các nhánh đang chờ |
-| `/git-mark unmark <nhánh>` | Gỡ 1 nhánh ra khỏi danh sách |
-| `/git-mark clear` | Xóa sạch danh sách |
-| `/bundle-local <version>` | Kích hoạt gom release (VD: `/bundle-local uat-1.1.3`) |
+| `/git-mark` or `/mark` | Mark currently checked-out branch |
+| `/git-mark <branch_name>` | Mark an explicit branch |
+| `/git-mark list` | Display numbered list of marked branches |
+| `/git-mark unmark <branch>` | Remove a branch from the list |
+| `/git-mark clear` | Clear the marked list |
+| `/bundle-local <version>` | Compile changelog & SQL scripts (e.g. `/bundle-local uat-1.1.3`) |
 
 ---
 
-## 📂 Cấu trúc kết quả sinh ra (Output Artifacts)
+## 📂 Generated Release Output Structure
 
 ```text
-# Nếu repo có thư mục .antigravity:
+# If the repo contains a .antigravity directory:
 .antigravity/
 └── release_output/
-    └── uat-1.1.3/                      <-- Tên phiên bản bạn truyền vào
-        ├── branches.txt                <-- Danh sách các nhánh cấu thành bản này
-        ├── CHANGELOG_LOCAL.md          <-- Changelog 2 tầng (Ready-to-copy & Audit)
-        └── combined_db_scripts.sql     <-- File SQL tổng hợp toàn bộ migration
+    └── uat-1.1.3/                      <-- Your release version name
+        ├── branches.txt                <-- List of source branches
+        ├── CHANGELOG_LOCAL.md          <-- 2-tier Changelog (Ready-to-copy & Audit)
+        └── combined_db_scripts.sql     <-- Compiled SQL migrations
 
-# Nếu repo thông thường:
+# Standard repository:
 release_output/
 └── uat-1.1.3/
     ├── branches.txt
@@ -109,18 +114,18 @@ release_output/
 
 ---
 
-## 🤖 Tương thích với các AI Agent khác (Cross-Agent Setup)
+## 🤖 Cross-Agent Setup (Claude Code / Cursor / Windsurf)
 
-- **Claude Code**: Copy thư mục `skills/*` vào `~/.claude/skills/`.
-- **Cursor / Windsurf**: Thêm dòng sau vào `.cursorrules`:
+- **Claude Code**: Copy `skills/*` into `~/.claude/skills/`.
+- **Cursor / Windsurf**: Add to `.cursorrules`:
   ```text
-  When I type /bundle-local <version>, run PowerShell:
-  powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME/.gemini/config/skills/bundle-local/scripts/bundle-local.ps1" "<version>"
+  When I ask to bundle a release or type /bundle-local <version>, execute:
+  python "$HOME/.gemini/config/skills/bundle-local/scripts/bundle_local.py" "<version>"
   ```
-- **CLI thuần túy**: Sử dụng trực tiếp `git mark` và `git bundle-local` mà không cần bất kỳ AI Agent nào.
+- **Plain Terminal**: Use `git mark` and `git bundle-local` natively without any AI assistant.
 
 ---
 
 ## 📄 License
-Phát hành theo giấy phép [MIT License](LICENSE).
-Tác giả: [HuyTinh](https://github.com/HuyTinh).
+Released under the [MIT License](LICENSE).  
+Author: [HuyTinh](https://github.com/HuyTinh).
