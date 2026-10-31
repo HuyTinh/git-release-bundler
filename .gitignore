@@ -2,6 +2,12 @@
 .DS_Store
 Thumbs.db
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
 # Output artifacts
 release_output/
 .antigravity/release_output/

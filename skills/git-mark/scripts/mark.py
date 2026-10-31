@@ -4,6 +4,8 @@ git-mark: Mark Git branches for local release bundling.
 Zero dependencies (Standard Library only). Cross-platform (Windows, macOS, Linux).
 """
 
+from __future__ import annotations
+
 import sys
 import subprocess
 from pathlib import Path
@@ -24,7 +26,7 @@ def run_git(args: list[str]) -> tuple[int, str]:
 
 
 def main():
-    # 1. Verify Git repository
+    # 1. Verify Git repository (Item 8)
     code, git_root = run_git(["rev-parse", "--show-toplevel"])
     if code != 0 or not git_root:
         print("[ERROR] Current directory is not a Git repository.", file=sys.stderr)
@@ -34,7 +36,7 @@ def main():
     if code != 0 or not git_dir:
         git_dir = ".git"
 
-    marked_file = Path(git_root) / git_dir / "marked_branches.txt"
+    marked_file = (Path(git_root) / git_dir / "marked_branches.txt").resolve()
 
     args = sys.argv[1:]
     action_or_branch = args[0].strip() if len(args) > 0 else ""
@@ -82,15 +84,18 @@ def main():
             if branch_to_remove in lines:
                 updated = [b for b in lines if b != branch_to_remove]
                 if updated:
-                    marked_file.write_text("\n".join(updated) + "\n", encoding="utf-8")
+                    with open(marked_file, "w", encoding="utf-8", newline="\n") as f:
+                        f.write("\n".join(updated) + "\n")
                 else:
                     marked_file.unlink(missing_ok=True)
                 print(f"[OK] Unmarked branch '{branch_to_remove}' ({len(updated)} branches remaining).")
+                sys.exit(0)
             else:
-                print(f"[WARN] Branch '{branch_to_remove}' was not found in the marked list.")
+                print(f"[WARN] Branch '{branch_to_remove}' was not found in the marked list.", file=sys.stderr)
+                sys.exit(2)
         else:
-            print("[WARN] No branches currently marked.")
-        sys.exit(0)
+            print("[WARN] No branches currently marked.", file=sys.stderr)
+            sys.exit(2)
 
     # 5. Action: default mark
     branch_to_mark = action_or_branch
@@ -123,8 +128,11 @@ def main():
         print(f"[INFO] Branch '{branch_to_mark}' is already marked ({len(existing)} branches waiting).")
     else:
         existing.append(branch_to_mark)
-        marked_file.write_text("\n".join(existing) + "\n", encoding="utf-8")
+        with open(marked_file, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(existing) + "\n")
         print(f"[OK] Marked branch: {branch_to_mark} (Total: {len(existing)} branches waiting).")
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
